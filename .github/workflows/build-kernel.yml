@@ -1,0 +1,121 @@
+name: Build Xiaomi 11 (Venus) Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - seventeen
+    paths:
+      - 'techpack/display/**'
+      - '.github/workflows/**'
+
+jobs:
+  build:
+    name: Build Kernel with Proton-Clang
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            ca-certificates \
+            curl \
+            flex \
+            gcc \
+            git \
+            libelf-dev \
+            libssl-dev \
+            lld \
+            llvm \
+            make \
+            python3 \
+            xz-utils \
+            zip
+
+      - name: Setup Proton-Clang Toolchain
+        run: |
+          echo "Cloning Proton-Clang toolchain..."
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git "$GITHUB_WORKSPACE/proton-clang"
+          "$GITHUB_WORKSPACE/proton-clang/bin/clang" --version
+
+      - name: Generate Kernel Configuration
+        run: |
+          export PATH="$GITHUB_WORKSPACE/proton-clang/bin:$PATH"
+          mkdir -p out
+
+          echo "Merging defconfig for Venus (SM8350)..."
+          ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O out \
+            arch/arm64/configs/vendor/lahaina-qgki_defconfig \
+            arch/arm64/configs/vendor/lahaina_QGKI.config \
+            arch/arm64/configs/vendor/xiaomi_QGKI.config \
+            arch/arm64/configs/vendor/venus_QGKI.config
+
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang olddefconfig
+
+      - name: Compile Kernel Image & DTBs
+        run: |
+          export PATH="$GITHUB_WORKSPACE/proton-clang/bin:$PATH"
+
+          make -j$(nproc --all) \
+            O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            READELF=llvm-readelf \
+            STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            Image.gz dtbs
+
+      - name: Package with AnyKernel3
+        run: |
+          echo "Preparing AnyKernel3 package..."
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+          # Configure device details
+          sed -i 's/device.name1=.*/device.name1=venus/' AnyKernel3/anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=Xiaomi 11/' AnyKernel3/anykernel.sh
+
+          # Copy Kernel Image
+          if [ -f "out/arch/arm64/boot/Image.gz" ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          elif [ -f "out/arch/arm64/boot/Image" ]; then
+            cp out/arch/arm64/boot/Image AnyKernel3/
+          fi
+
+          # Copy DTBs if present
+          mkdir -p AnyKernel3/dtb
+          find out/arch/arm64/boot/dts/vendor/qcom -name "*venus*.dtb*" -exec cp {} AnyKernel3/dtb/ \; 2>/dev/null || true
+
+          # Create flashable zip
+          cd AnyKernel3
+          zip -r9 ../AnyKernel3-venus-dc-dimming.zip * -x .git README.md *placeholder
+          cd ..
+
+      - name: Upload AnyKernel3 Flashable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnyKernel3-venus-dc-dimming
+          path: AnyKernel3-venus-dc-dimming.zip
+
+      - name: Upload Raw Kernel Image & DTBs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raw-Kernel-Artifacts
+          path: |
+            out/arch/arm64/boot/Image.gz
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/dts/vendor/qcom/*venus*.dtb*
