@@ -108,13 +108,14 @@ jobs:
 
           # Create module.prop
           cat << 'EOF' > "$MODULE_DIR/module.prop"
-id=venus_dc_dimming
-name=Xiaomi 11 Hardware DC Dimming
-version=v1.0
-versionCode=1
-author=szx
-description=Hardware DC Dimming for Xiaomi 11 (Venus). Seamlessly replaces msm_drm.ko with DCS commands (53 28 / 53 20) via /sys/devices/platform/soc/soc:qcom,dsi-display-primary/dc_dimming.
-EOF
+          id=venus_dc_dimming
+          name=Xiaomi 11 Hardware DC Dimming
+          version=v1.0
+          versionCode=1
+          author=szx
+          description=Hardware DC Dimming for Xiaomi 11 (Venus). Seamlessly replaces msm_drm.ko with DCS commands (53 28 / 53 20) via /sys/devices/platform/soc/soc:qcom,dsi-display-primary/dc_dimming.
+          EOF
+          sed -i 's/^[ \t]*//' "$MODULE_DIR/module.prop"
 
           # Create Magisk/APatch installer structure
           mkdir -p "$MODULE_DIR/META-INF/com/google/android"
@@ -122,42 +123,44 @@ EOF
           
           # Use standard Magisk module installer entry
           cat << 'EOF' > "$MODULE_DIR/META-INF/com/google/android/update-binary"
-#!/sbin/sh
-umask 022
-OUTFD=$2
-ZIPFILE=$3
+          #!/sbin/sh
+          umask 022
+          OUTFD=$2
+          ZIPFILE=$3
 
-ui_print() {
-  echo -e "$1" >&2
-}
+          ui_print() {
+            echo -e "$1" >&2
+          }
 
-ui_print "****************************************"
-ui_print "*   Xiaomi 11 Hardware DC Dimming      *"
-ui_print "*          by szx                      *"
-ui_print "****************************************"
+          ui_print "****************************************"
+          ui_print "*   Xiaomi 11 Hardware DC Dimming      *"
+          ui_print "*          by szx                      *"
+          ui_print "****************************************"
 
-# APatch / Magisk auto installation redirect
-if [ -n "$APATCH" ] || [ -f "/data/adb/ap/bin/magisk" ]; then
-  ui_print "- Installing as APatch module..."
-fi
+          # APatch / Magisk auto installation redirect
+          if [ -n "$APATCH" ] || [ -f "/data/adb/ap/bin/magisk" ]; then
+            ui_print "- Installing as APatch module..."
+          fi
 
-[ -z "$MAGISKTMP" ] && export MAGISKTMP=/dev/tmp
-if [ -f "$MAGISKTMP/magisk" ]; then
-  exec "$MAGISKTMP/magisk" --install-module "$ZIPFILE"
-elif [ -f "/data/adb/ap/bin/magisk" ]; then
-  exec "/data/adb/ap/bin/magisk" --install-module "$ZIPFILE"
-fi
+          [ -z "$MAGISKTMP" ] && export MAGISKTMP=/dev/tmp
+          if [ -f "$MAGISKTMP/magisk" ]; then
+            exec "$MAGISKTMP/magisk" --install-module "$ZIPFILE"
+          elif [ -f "/data/adb/ap/bin/magisk" ]; then
+            exec "/data/adb/ap/bin/magisk" --install-module "$ZIPFILE"
+          fi
 
-exit 0
-EOF
+          exit 0
+          EOF
+          sed -i 's/^[ \t]*//' "$MODULE_DIR/META-INF/com/google/android/update-binary"
           chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
           # Also provide customize.sh
           cat << 'EOF' > "$MODULE_DIR/customize.sh"
-ui_print "- Installing Venus DC Dimming Driver module..."
-ui_print "- Driver target: /vendor_dlkm/lib/modules/msm_drm.ko"
-set_perm_recursive $MODPATH 0 0 0755 0644
-EOF
+          ui_print "- Installing Venus DC Dimming Driver module..."
+          ui_print "- Driver target: /vendor_dlkm/lib/modules/msm_drm.ko"
+          set_perm_recursive $MODPATH 0 0 0755 0644
+          EOF
+          sed -i 's/^[ \t]*//' "$MODULE_DIR/customize.sh"
 
           # Create flashable zip
           cd "$MODULE_DIR"
