@@ -78,27 +78,64 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            Image.gz dtbs
+            Image Image.gz dtbs
 
       - name: Package with AnyKernel3
         run: |
           echo "Preparing AnyKernel3 package..."
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-          # Configure device details
-          sed -i 's/device.name1=.*/device.name1=venus/' AnyKernel3/anykernel.sh
-          sed -i 's/device.name2=.*/device.name2=Xiaomi 11/' AnyKernel3/anykernel.sh
+          # Write customized anykernel.sh for SM8350 Venus
+          cat << 'EOF' > AnyKernel3/anykernel.sh
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
 
-          # Copy Kernel Image
-          if [ -f "out/arch/arm64/boot/Image.gz" ]; then
-            cp out/arch/arm64/boot/Image.gz AnyKernel3/
-          elif [ -f "out/arch/arm64/boot/Image" ]; then
+          ### AnyKernel setup
+          # global properties
+          properties() { '
+          kernel.string=Venus DC Dimming Kernel for Xiaomi 11
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=venus
+          device.name2=Xiaomi 11
+          device.name3=
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          '; } # end properties
+
+          ### AnyKernel install
+          # boot shell variables
+          BLOCK=boot;
+          IS_SLOT_DEVICE=auto;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
+          . tools/ak3-core.sh;
+
+          # boot install
+          split_boot;
+
+          flash_boot;
+          ## end boot install
+          EOF
+          sed -i 's/^[ \t]*//' AnyKernel3/anykernel.sh
+
+          # Copy Kernel Image (prefer Image for modern GKI boot partition)
+          if [ -f "out/arch/arm64/boot/Image" ]; then
             cp out/arch/arm64/boot/Image AnyKernel3/
+          elif [ -f "out/arch/arm64/boot/Image.gz" ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
           fi
 
-          # Copy DTBs if present
+          # Copy DTB/DTBO clean files
           mkdir -p AnyKernel3/dtb
-          find out/arch/arm64/boot/dts/vendor/qcom -name "*venus*.dtb*" -exec cp {} AnyKernel3/dtb/ \; 2>/dev/null || true
+          find out/arch/arm64/boot/dts/vendor/qcom -maxdepth 1 -name "*venus*.dtb*" -not -name ".*" -not -name "*.tmp*" -exec cp {} AnyKernel3/dtb/ \; 2>/dev/null || true
 
           # Create flashable zip
           cd AnyKernel3
@@ -116,6 +153,6 @@ jobs:
         with:
           name: Raw-Kernel-Artifacts
           path: |
-            out/arch/arm64/boot/Image.gz
             out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
             out/arch/arm64/boot/dts/vendor/qcom/*venus*.dtb*
